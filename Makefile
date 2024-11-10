@@ -4,13 +4,13 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O3 -std=c99 -march=native -flto
 DEBUG_FLAGS = -Wall -Wextra -g -std=c99 -DDEBUG
-SRCDIR = src
 BUILDDIR = build
 BINDIR = bin
 TESTDIR = examples
 
-SOURCES = $(SRCDIR)/so_lang.c
-HEADERS = $(SRCDIR)/so_lang.h
+# Source files (assuming they're in the current directory)
+SOURCES = so_lang.c
+HEADERS = so_lang.h
 TARGET = $(BINDIR)/solang
 
 all: $(TARGET)
@@ -30,14 +30,16 @@ debug: $(SOURCES) $(HEADERS) | $(BINDIR)
 	$(CC) $(DEBUG_FLAGS) $(SOURCES) -o $(BINDIR)/solang-debug
 	@echo "✓ Debug build complete!"
 
-test: $(TARGET) examples
+# Run tests
+test: $(TARGET) create-examples
 	@echo "Running So Lang tests..."
 	@for file in $(TESTDIR)/*.so; do \
-		echo "Testing $$file..."; \
-		$(TARGET) $$file && echo "✓ Test passed"; \
+		echo "Testing $file..."; \
+		$(TARGET) $file && echo "✓ Test passed"; \
 	done
 
-examples: | $(TESTDIR)
+# Create example programs  
+create-examples: | $(TESTDIR)
 	@echo 'let x = 42' > $(TESTDIR)/simple.so
 	@echo 'print(x)' >> $(TESTDIR)/simple.so
 	@echo '' >> $(TESTDIR)/simple.so
@@ -71,12 +73,14 @@ distclean: clean
 	rm -rf $(TESTDIR)
 	@echo "✓ Cleaned everything"
 
-benchmark: $(TARGET) examples
+# Performance benchmark
+benchmark: $(TARGET) create-examples
 	@echo "Benchmarking So Lang compiler performance..."
 	@time $(TARGET) $(TESTDIR)/math.so
 	@echo "Compilation complete!"
 
-memcheck: debug examples
+# Check for memory leaks (requires valgrind)
+memcheck: debug create-examples
 	@if command -v valgrind >/dev/null 2>&1; then \
 		echo "Running memory leak check..."; \
 		valgrind --leak-check=full --show-leak-kinds=all $(BINDIR)/solang-debug $(TESTDIR)/simple.so; \
