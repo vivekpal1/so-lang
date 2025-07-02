@@ -1,4 +1,4 @@
-# So Lang Programming Language
+# So Lang
 
 **A fast, simple toy programming language built in C for learning compiler construction**
 
