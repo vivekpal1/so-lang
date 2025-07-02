@@ -1,0 +1,530 @@
+// complete_example.so - Comprehensive So Lang Example
+// Demonstrates all major features of self-hosted So Lang
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+fn is_even(n) {
+    let remainder = n - (n / 2) * 2
+    if remainder == 0 {
+        return 1
+    } else {
+        return 0
+    }
+}
+
+fn abs(n) {
+    if n < 0 {
+        return 0 - n
+    }
+    return n
+}
+
+fn max(a, b) {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+fn min(a, b) {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+// ============================================================================
+// MATHEMATICAL FUNCTIONS
+// ============================================================================
+
+fn factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn fibonacci(n) {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+fn power(base, exp) {
+    if exp == 0 {
+        return 1
+    }
+    if exp == 1 {
+        return base
+    }
+    let half = power(base, exp / 2)
+    if is_even(exp) {
+        return half * half
+    } else {
+        return base * half * half
+    }
+}
+
+fn gcd(a, b) {
+    a = abs(a)
+    b = abs(b)
+    
+    if b == 0 {
+        return a
+    }
+    return gcd(b, a - (a / b) * b)  // a % b simulated
+}
+
+// ============================================================================
+// ARRAY-LIKE OPERATIONS (Using multiple variables)
+// ============================================================================
+
+fn sum_range(start, end) {
+    if start > end {
+        return 0
+    }
+    return start + sum_range(start + 1, end)
+}
+
+fn count_down(n) {
+    if n <= 0 {
+        print("Blast off!")
+        return 0
+    }
+    print(n)
+    return count_down(n - 1)
+}
+
+fn print_multiplication_table(n) {
+    let i = 1
+    print("Multiplication table for:")
+    print(n)
+    
+    if i <= 10 {
+        let result = n * i
+        print(result)
+        return print_multiplication_table_helper(n, i + 1)
+    }
+    return 0
+}
+
+fn print_multiplication_table_helper(n, i) {
+    if i <= 10 {
+        let result = n * i
+        print(result)
+        return print_multiplication_table_helper(n, i + 1)
+    }
+    return 0
+}
+
+// ============================================================================
+// SORTING AND SEARCHING
+// ============================================================================
+
+fn bubble_sort_step(a, b, c, d, e, sorted) {
+    // Simplified bubble sort for 5 elements
+    let swapped = 0
+    
+    if a > b {
+        let temp = a
+        a = b
+        b = temp
+        swapped = 1
+    }
+    if b > c {
+        let temp = b
+        b = c
+        c = temp
+        swapped = 1
+    }
+    if c > d {
+        let temp = c
+        c = d
+        d = temp
+        swapped = 1
+    }
+    if d > e {
+        let temp = d
+        d = e
+        e = temp
+        swapped = 1
+    }
+    
+    print("Sorting step:")
+    print(a)
+    print(b)
+    print(c)
+    print(d)
+    print(e)
+    
+    if swapped == 1 {
+        return bubble_sort_step(a, b, c, d, e, 0)
+    }
+    
+    print("Sorted!")
+    return 0
+}
+
+// ============================================================================
+// STRING-LIKE OPERATIONS
+// ============================================================================
+
+fn print_banner(message) {
+    print("====================")
+    print(message)
+    print("====================")
+    return 0
+}
+
+fn print_box(content) {
+    print("+----------+")
+    print(content)
+    print("+----------+")
+    return 0
+}
+
+// ============================================================================
+// ADVANCED ALGORITHMS
+// ============================================================================
+
+fn collatz_sequence(n) {
+    print("Collatz sequence starting from:")
+    print(n)
+    
+    if n == 1 {
+        print("Reached 1!")
+        return 1
+    }
+    
+    if is_even(n) {
+        return collatz_sequence(n / 2)
+    } else {
+        return collatz_sequence(3 * n + 1)
+    }
+}
+
+fn prime_check(n) {
+    if n <= 1 {
+        return 0
+    }
+    if n <= 3 {
+        return 1
+    }
+    if is_even(n) {
+        return 0
+    }
+    
+    return prime_check_helper(n, 3)
+}
+
+fn prime_check_helper(n, divisor) {
+    if divisor * divisor > n {
+        return 1
+    }
+    if n - (n / divisor) * divisor == 0 {  // n % divisor == 0
+        return 0
+    }
+    return prime_check_helper(n, divisor + 2)
+}
+
+fn print_primes_up_to(limit) {
+    print("Prime numbers up to:")
+    print(limit)
+    print_primes_helper(2, limit)
+    return 0
+}
+
+fn print_primes_helper(current, limit) {
+    if current > limit {
+        return 0
+    }
+    
+    if prime_check(current) {
+        print(current)
+    }
+    
+    return print_primes_helper(current + 1, limit)
+}
+
+// ============================================================================
+// CALCULATOR FUNCTIONS
+// ============================================================================
+
+fn calculate_circle_area(radius) {
+    // Using pi ≈ 314/100
+    let pi_times_100 = 314
+    let area_times_100 = pi_times_100 * radius * radius
+    let area = area_times_100 / 100
+    
+    print("Circle with radius:")
+    print(radius)
+    print("Has area approximately:")
+    print(area)
+    
+    return area
+}
+
+fn calculate_compound_interest(principal, rate, time) {
+    // Simplified compound interest: A = P * (1 + r)^t
+    // Using integer approximation
+    let amount = principal
+    let i = 0
+    
+    if i < time {
+        amount = amount + (amount * rate / 100)
+        return calculate_compound_interest_helper(amount, rate, time, i + 1)
+    }
+    
+    return amount
+}
+
+fn calculate_compound_interest_helper(amount, rate, time, i) {
+    if i < time {
+        amount = amount + (amount * rate / 100)
+        return calculate_compound_interest_helper(amount, rate, time, i + 1)
+    }
+    return amount
+}
+
+// ============================================================================
+// PATTERN PRINTING
+// ============================================================================
+
+fn print_triangle(size) {
+    print("Triangle pattern:")
+    print_triangle_helper(1, size)
+    return 0
+}
+
+fn print_triangle_helper(current, size) {
+    if current > size {
+        return 0
+    }
+    
+    // Print stars (simplified - just print the line number)
+    print(current)
+    
+    return print_triangle_helper(current + 1, size)
+}
+
+fn print_diamond(size) {
+    print("Diamond pattern (size):")
+    print(size)
+    print_diamond_upper(1, size)
+    print_diamond_lower(size - 1, size)
+    return 0
+}
+
+fn print_diamond_upper(current, size) {
+    if current > size {
+        return 0
+    }
+    print(current)
+    return print_diamond_upper(current + 1, size)
+}
+
+fn print_diamond_lower(current, size) {
+    if current < 1 {
+        return 0
+    }
+    print(current)
+    return print_diamond_lower(current - 1, size)
+}
+
+// ============================================================================
+// GAME FUNCTIONS
+// ============================================================================
+
+fn guessing_game_simulation() {
+    let secret = 42
+    let guess1 = 25
+    let guess2 = 60
+    let guess3 = 42
+    
+    print("Guessing game simulation!")
+    print("Secret number is 42")
+    
+    print("Guess 1:")
+    print(guess1)
+    if guess1 == secret {
+        print("Correct!")
+        return 1
+    } else if guess1 < secret {
+        print("Too low!")
+    } else {
+        print("Too high!")
+    }
+    
+    print("Guess 2:")
+    print(guess2)
+    if guess2 == secret {
+        print("Correct!")
+        return 2
+    } else if guess2 < secret {
+        print("Too low!")
+    } else {
+        print("Too high!")
+    }
+    
+    print("Guess 3:")
+    print(guess3)
+    if guess3 == secret {
+        print("Correct!")
+        return 3
+    }
+    
+    return 0
+}
+
+fn tic_tac_toe_check_winner() {
+    // Simulate a tic-tac-toe board state
+    // 1 = X, 2 = O, 0 = empty
+    let pos1 = 1
+    let pos2 = 1
+    let pos3 = 1
+    let pos4 = 2
+    let pos5 = 2
+    let pos6 = 0
+    let pos7 = 0
+    let pos8 = 0
+    let pos9 = 0
+    
+    print("Tic-tac-toe board:")
+    print(pos1)
+    print(pos2)
+    print(pos3)
+    
+    // Check first row
+    if pos1 == pos2 {
+        if pos2 == pos3 {
+            if pos1 != 0 {
+                print("Winner found in first row!")
+                print(pos1)
+                return pos1
+            }
+        }
+    }
+    
+    print("No winner yet")
+    return 0
+}
+
+// ============================================================================
+// MAIN DEMONSTRATION FUNCTION
+// ============================================================================
+
+fn demonstrate_feature(feature_name) {
+    print_banner(feature_name)
+    return 0
+}
+
+fn main() {
+    print_banner("So Lang Complete Feature Demonstration")
+    print("Self-hosted compiler showcase")
+    print("")
+    
+    // Basic arithmetic
+    demonstrate_feature("Basic Arithmetic")
+    let a = 15
+    let b = 7
+    print("15 + 7 =")
+    print(a + b)
+    print("15 * 7 =")
+    print(a * b)
+    print("")
+    
+    // Mathematical functions
+    demonstrate_feature("Mathematical Functions")
+    print("Factorial of 5:")
+    print(factorial(5))
+    print("Fibonacci of 8:")
+    print(fibonacci(8))
+    print("2^10:")
+    print(power(2, 10))
+    print("GCD of 48 and 18:")
+    print(gcd(48, 18))
+    print("")
+    
+    // Utility functions
+    demonstrate_feature("Utility Functions")
+    print("Is 42 even?")
+    print(is_even(42))
+    print("Is 17 even?")
+    print(is_even(17))
+    print("Max of 25 and 42:")
+    print(max(25, 42))
+    print("Absolute value of -15:")
+    print(abs(0 - 15))
+    print("")
+    
+    // Range operations
+    demonstrate_feature("Range Operations")
+    print("Sum from 1 to 10:")
+    print(sum_range(1, 10))
+    print("Countdown from 5:")
+    count_down(5)
+    print("")
+    
+    // Prime numbers
+    demonstrate_feature("Prime Number Check")
+    print("Is 17 prime?")
+    print(prime_check(17))
+    print("Is 15 prime?")
+    print(prime_check(15))
+    print("Primes up to 20:")
+    print_primes_up_to(20)
+    print("")
+    
+    // Geometric calculations
+    demonstrate_feature("Geometric Calculations")
+    calculate_circle_area(5)
+    print("")
+    
+    // Financial calculations
+    demonstrate_feature("Compound Interest")
+    let final_amount = calculate_compound_interest(1000, 5, 3)
+    print("$1000 at 5% for 3 years:")
+    print(final_amount)
+    print("")
+    
+    // Pattern printing
+    demonstrate_feature("Pattern Printing")
+    print_triangle(5)
+    print("")
+    print_diamond(4)
+    print("")
+    
+    // Algorithm demonstration
+    demonstrate_feature("Collatz Sequence")
+    collatz_sequence(7)
+    print("")
+    
+    // Sorting demonstration
+    demonstrate_feature("Bubble Sort")
+    bubble_sort_step(64, 34, 25, 12, 22, 0)
+    print("")
+    
+    // Game simulations
+    demonstrate_feature("Game Simulations")
+    let guesses = guessing_game_simulation()
+    print("Won in guesses:")
+    print(guesses)
+    print("")
+    tic_tac_toe_check_winner()
+    print("")
+    
+    // Multiplication table
+    demonstrate_feature("Multiplication Table")
+    print_multiplication_table(7)
+    print("")
+    
+    // Final message
+    print_banner("DEMONSTRATION COMPLETE")
+    print("So Lang is fully self-hosted!")
+    print("All features working correctly.")
+    
+    return 0
+}

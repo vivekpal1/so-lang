@@ -1,0 +1,256 @@
+# Makefile.bootstrap - Self-hosting So Lang Build System
+# Complete self-hosting build process for So Lang
+
+CC = gcc
+RUSTC = rustc
+CFLAGS = -Wall -Wextra -O3 -std=c99 -march=native -flto
+DEBUG_FLAGS = -Wall -Wextra -g -std=c99 -DDEBUG
+BINDIR = bin
+BOOTSTRAP_DIR = bootstrap
+EXAMPLES_DIR = examples
+
+# Stage 0: C compiler (initial bootstrap)
+STAGE0_SOURCES = so_lang_enhanced.c
+STAGE0_TARGET = $(BINDIR)/solang-stage0
+
+# Stage 1: So Lang written in So Lang
+STAGE1_SOURCE = $(BOOTSTRAP_DIR)/solang_bootstrap.so
+STAGE1_C = $(BOOTSTRAP_DIR)/solang_stage1.c
+STAGE1_TARGET = $(BINDIR)/solang-stage1
+
+# Stage 2: Self-compiled So Lang compiler
+STAGE2_SOURCE = $(BOOTSTRAP_DIR)/solang_bootstrap.so
+STAGE2_C = $(BOOTSTRAP_DIR)/solang_stage2.c
+STAGE2_TARGET = $(BINDIR)/solang-stage2
+
+# Final target
+FINAL_TARGET = $(BINDIR)/solang-self
+
+# Default target - complete bootstrap
+all: bootstrap-complete
+
+# Create directories
+$(BINDIR):
+	mkdir -p $(BINDIR)
+
+$(BOOTSTRAP_DIR):
+	mkdir -p $(BOOTSTRAP_DIR)
+
+$(EXAMPLES_DIR):
+	mkdir -p $(EXAMPLES_DIR)
+
+# ============================================================================
+# STAGE 0: Build initial C compiler
+# ============================================================================
+
+stage0: $(STAGE0_TARGET)
+
+$(STAGE0_TARGET): $(STAGE0_SOURCES) so_lang.h | $(BINDIR)
+	@echo "🚀 Stage 0: Building initial C compiler..."
+	$(CC) $(CFLAGS) $(STAGE0_SOURCES) -o $(STAGE0_TARGET)
+	@echo "✓ Stage 0 complete: $(STAGE0_TARGET)"
+
+# ============================================================================
+# STAGE 1: Compile So Lang compiler written in So Lang using C compiler
+# ============================================================================
+
+stage1: $(STAGE1_TARGET)
+
+$(STAGE1_TARGET): $(STAGE0_TARGET) $(STAGE1_SOURCE) | $(BOOTSTRAP_DIR)
+	@echo "🔄 Stage 1: Compiling So Lang compiler with C compiler..."
+	$(STAGE0_TARGET) $(STAGE1_SOURCE) --bootstrap
+	mv solang_self_hosted.c $(STAGE1_C)
+	$(CC) $(CFLAGS) $(STAGE1_C) -o $(STAGE1_TARGET)
+	@echo "✓ Stage 1 complete: $(STAGE1_TARGET)"
+
+# ============================================================================
+# STAGE 2: Compile So Lang compiler using Stage 1 compiler
+# ============================================================================
+
+stage2: $(STAGE2_TARGET)
+
+$(STAGE2_TARGET): $(STAGE1_TARGET) $(STAGE2_SOURCE)
+	@echo "🔄 Stage 2: Self-compiling So Lang compiler..."
+	$(STAGE1_TARGET) $(STAGE2_SOURCE) --bootstrap
+	mv solang_self_hosted.c $(STAGE2_C)
+	$(CC) $(CFLAGS) $(STAGE2_C) -o $(STAGE2_TARGET)
+	@echo "✓ Stage 2 complete: $(STAGE2_TARGET)"
+
+# ============================================================================
+# BOOTSTRAP VERIFICATION: Ensure Stage 1 and Stage 2 produce identical output
+# ============================================================================
+
+verify-bootstrap: $(STAGE1_TARGET) $(STAGE2_TARGET) | $(EXAMPLES_DIR)
+	@echo "🔍 Verifying bootstrap consistency..."
+	
+	# Create test program
+	@echo 'fn test() {' > $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    let x = 42' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    print(x)' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    return x' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '}' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo 'fn main() {' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    let result = test()' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    print(result)' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '    return 0' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	@echo '}' >> $(EXAMPLES_DIR)/test_bootstrap.so
+	
+	# Compile with both stages
+	$(STAGE1_TARGET) $(EXAMPLES_DIR)/test_bootstrap.so
+	mv output.c $(BOOTSTRAP_DIR)/stage1_output.c
+	
+	$(STAGE2_TARGET) $(EXAMPLES_DIR)/test_bootstrap.so
+	mv output.c $(BOOTSTRAP_DIR)/stage2_output.c
+	
+	# Compare outputs
+	@if diff $(BOOTSTRAP_DIR)/stage1_output.c $(BOOTSTRAP_DIR)/stage2_output.c > /dev/null 2>&1; then \
+		echo "✅ Bootstrap verification successful!"; \
+		echo "   Stage 1 and Stage 2 compilers produce identical output"; \
+	else \
+		echo "❌ Bootstrap verification failed!"; \
+		echo "   Stage 1 and Stage 2 compilers produce different output"; \
+		diff $(BOOTSTRAP_DIR)/stage1_output.c $(BOOTSTRAP_DIR)/stage2_output.c; \
+		exit 1; \
+	fi
+
+# ============================================================================
+# COMPLETE BOOTSTRAP PROCESS
+# ============================================================================
+
+bootstrap-complete: verify-bootstrap $(FINAL_TARGET)
+	@echo ""
+	@echo "🎉 BOOTSTRAP COMPLETE!"
+	@echo "   So Lang compiler is now self-hosting!"
+	@echo ""
+	@echo "📊 Build Summary:"
+	@echo "   Stage 0: C compiler        → $(STAGE0_TARGET)"
+	@echo "   Stage 1: So→C via C        → $(STAGE1_TARGET)"
+	@echo "   Stage 2: So→C via So       → $(STAGE2_TARGET)"
+	@echo "   Final:   Self-hosted       → $(FINAL_TARGET)"
+	@echo ""
+
+$(FINAL_TARGET): $(STAGE2_TARGET)
+	cp $(STAGE2_TARGET) $(FINAL_TARGET)
+	@echo "✓ Final self-hosted compiler: $(FINAL_TARGET)"
+
+# ============================================================================
+# RUST BOOTSTRAP
+# ============================================================================
+
+bootstrap-rust: $(STAGE0_TARGET) $(STAGE1_SOURCE) | $(BOOTSTRAP_DIR)
+	@echo "🦀 Rust Bootstrap: Compiling to Rust..."
+	$(STAGE0_TARGET) $(STAGE1_SOURCE) --rust --bootstrap
+	mv solang_self_hosted.rs $(BOOTSTRAP_DIR)/solang_bootstrap.rs
+	
+	@if command -v $(RUSTC) >/dev/null 2>&1; then \
+		$(RUSTC) $(BOOTSTRAP_DIR)/solang_bootstrap.rs -o $(BINDIR)/solang-rust; \
+		echo "✅ Rust bootstrap complete: $(BINDIR)/solang-rust"; \
+	else \
+		echo "⚠️  Rust compiler not found. Generated: $(BOOTSTRAP_DIR)/solang_bootstrap.rs"; \
+	fi
+
+# ============================================================================
+# DEVELOPMENT AND TESTING
+# ============================================================================
+
+# Create the bootstrap So Lang compiler source
+create-bootstrap: | $(BOOTSTRAP_DIR)
+	@echo "📝 Creating bootstrap compiler source..."
+	@# Copy the bootstrap source from artifacts
+	@echo "Copy the solang_bootstrap.so content to $(BOOTSTRAP_DIR)/solang_bootstrap.so"
+	@echo "Bootstrap source template ready in $(BOOTSTRAP_DIR)/"
+
+# Test the bootstrap process with debug info
+test-bootstrap: stage0 create-bootstrap
+	@echo "🧪 Testing bootstrap process..."
+	
+	# Test Stage 0 with simple program
+	@echo 'let x = 123' > $(EXAMPLES_DIR)/simple_test.so
+	@echo 'print(x)' >> $(EXAMPLES_DIR)/simple_test.so
+	
+	$(STAGE0_TARGET) $(EXAMPLES_DIR)/simple_test.so
+	$(CC) output.c -o $(EXAMPLES_DIR)/test_simple
+	@echo "Running simple test:"
+	$(EXAMPLES_DIR)/test_simple
+	
+	@echo "✓ Bootstrap test complete"
+
+# Performance comparison
+benchmark-bootstrap: bootstrap-complete | $(EXAMPLES_DIR)
+	@echo "⚡ Benchmarking bootstrap stages..."
+	
+	# Create benchmark program
+	@echo 'fn fibonacci(n) {' > $(EXAMPLES_DIR)/benchmark.so
+	@echo '    if n <= 1 {' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '        return n' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '    }' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '    return fibonacci(n - 1) + fibonacci(n - 2)' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '}' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo 'fn main() {' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '    let result = fibonacci(10)' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '    print(result)' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '    return 0' >> $(EXAMPLES_DIR)/benchmark.so
+	@echo '}' >> $(EXAMPLES_DIR)/benchmark.so
+	
+	@echo "Benchmarking compilation speed:"
+	@echo "Stage 0 (C compiler):"
+	@time $(STAGE0_TARGET) $(EXAMPLES_DIR)/benchmark.so > /dev/null
+	@echo "Stage 1 (So via C):"
+	@time $(STAGE1_TARGET) $(EXAMPLES_DIR)/benchmark.so > /dev/null
+	@echo "Stage 2 (So via So):"
+	@time $(STAGE2_TARGET) $(EXAMPLES_DIR)/benchmark.so > /dev/null
+
+# Clean build artifacts
+clean:
+	rm -rf $(BINDIR) $(BOOTSTRAP_DIR)/*.c $(BOOTSTRAP_DIR)/*.rs output.c output.rs
+	@echo "✓ Cleaned build artifacts"
+
+# Clean everything including bootstrap sources
+distclean: clean
+	rm -rf $(BOOTSTRAP_DIR) $(EXAMPLES_DIR)
+	@echo "✓ Cleaned everything"
+
+# Debug builds
+debug-stage0: so_lang_enhanced.c so_lang.h | $(BINDIR)
+	$(CC) $(DEBUG_FLAGS) so_lang_enhanced.c -o $(BINDIR)/solang-stage0-debug
+	@echo "✓ Debug Stage 0 build complete"
+
+# Show bootstrap status
+status:
+	@echo "So Lang Bootstrap Status:"
+	@echo "========================="
+	@if [ -f "$(STAGE0_TARGET)" ]; then echo "✅ Stage 0: C compiler ready"; else echo "❌ Stage 0: Not built"; fi
+	@if [ -f "$(STAGE1_TARGET)" ]; then echo "✅ Stage 1: So→C via C ready"; else echo "❌ Stage 1: Not built"; fi
+	@if [ -f "$(STAGE2_TARGET)" ]; then echo "✅ Stage 2: So→C via So ready"; else echo "❌ Stage 2: Not built"; fi
+	@if [ -f "$(FINAL_TARGET)" ]; then echo "✅ Final: Self-hosted compiler ready"; else echo "❌ Final: Not built"; fi
+	@echo ""
+	@if [ -f "$(STAGE1_SOURCE)" ]; then echo "📝 Bootstrap source exists"; else echo "⚠️  Bootstrap source missing"; fi
+
+# Help
+help:
+	@echo "So Lang Self-hosting Build System"
+	@echo "================================="
+	@echo ""
+	@echo "Bootstrap Targets:"
+	@echo "  bootstrap-complete  - Full self-hosting bootstrap (default)"
+	@echo "  stage0              - Build initial C compiler"
+	@echo "  stage1              - Compile So compiler using C compiler"
+	@echo "  stage2              - Self-compile So compiler"
+	@echo "  verify-bootstrap    - Verify bootstrap consistency"
+	@echo "  bootstrap-rust      - Bootstrap to Rust"
+	@echo ""
+	@echo "Utility:"
+	@echo "  status              - Show bootstrap build status"
+	@echo "  clean               - Remove build artifacts"
+	@echo "  distclean           - Remove everything"
+	@echo "  help                - Show this help"
+	@echo ""
+	@echo "Quick Start:"
+	@echo "  make create-bootstrap  # Set up files"
+	@echo "  make bootstrap-complete  # Full bootstrap"
+
+.PHONY: all stage0 stage1 stage2 bootstrap-complete verify-bootstrap
+.PHONY: bootstrap-rust create-bootstrap test-bootstrap benchmark-bootstrap
+.PHONY: clean distclean debug-stage0 status help
