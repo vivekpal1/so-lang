@@ -11,6 +11,9 @@ static char** function_names = NULL;
 static int function_count = 0;
 static bool in_function = false;
 
+// ============================================================================
+// ENHANCED UTILITY FUNCTIONS
+// ============================================================================
 
 void error(const char* message, int line, int column) {
     fprintf(stderr, "Error at line %d, column %d: %s\n", line, column, message);
@@ -36,6 +39,9 @@ char* read_file(const char* filename) {
     return content;
 }
 
+// ============================================================================
+// ENHANCED LEXER WITH FUNCTION SUPPORT
+// ============================================================================
 
 Lexer* lexer_create(char* source) {
     Lexer* lexer = malloc(sizeof(Lexer));
@@ -100,7 +106,7 @@ static void lexer_read_string(Lexer* lexer) {
     
     while (lexer_current_char(lexer) != '"' && lexer_current_char(lexer) != '\0') {
         if (lexer_current_char(lexer) == '\\') {
-            lexer_advance(lexer);
+            lexer_advance(lexer); // Skip escape character
             char escaped = lexer_current_char(lexer);
             switch (escaped) {
                 case 'n': buffer[i++] = '\n'; break;
@@ -119,7 +125,7 @@ static void lexer_read_string(Lexer* lexer) {
     }
     
     if (lexer_current_char(lexer) == '"') {
-        lexer_advance(lexer);
+        lexer_advance(lexer); // Skip closing quote
     }
     
     buffer[i] = '\0';
@@ -139,7 +145,6 @@ static void lexer_read_identifier(Lexer* lexer) {
     
     buffer[i] = '\0';
     
-   
     TokenType type = TOKEN_IDENTIFIER;
     if (strcmp(buffer, "let") == 0) type = TOKEN_LET;
     else if (strcmp(buffer, "fn") == 0) type = TOKEN_FN;
@@ -224,6 +229,9 @@ void lexer_free(Lexer* lexer) {
     free(lexer);
 }
 
+// ============================================================================
+// ENHANCED AST WITH FUNCTION SUPPORT
+// ============================================================================
 
 ASTNode* ast_create_node(NodeType type) {
     ASTNode* node = malloc(sizeof(ASTNode));
@@ -258,6 +266,9 @@ void ast_free(ASTNode* node) {
     free(node);
 }
 
+// ============================================================================
+// ENHANCED PARSER WITH FUNCTION SUPPORT
+// ============================================================================
 
 Parser* parser_create(Token* tokens, int token_count) {
     Parser* parser = malloc(sizeof(Parser));
@@ -314,12 +325,12 @@ static ASTNode* parser_parse_primary(Parser* parser) {
         // Check for function call
         if (parser_current_token(parser)->type == TOKEN_LPAREN) {
             node->type = NODE_FUNC_CALL;
-            parser_advance(parser); '('
+            parser_advance(parser); // Skip '('
             
             // Parse arguments (simplified - no args for now)
             while (parser_current_token(parser)->type != TOKEN_RPAREN &&
                    parser_current_token(parser)->type != TOKEN_EOF) {
-                arguments for now
+                // Skip arguments for now
                 parser_advance(parser);
             }
             parser_match(parser, TOKEN_RPAREN);
@@ -371,7 +382,7 @@ static ASTNode* parser_parse_block(Parser* parser) {
     while (parser_current_token(parser)->type != TOKEN_RBRACE && 
            parser_current_token(parser)->type != TOKEN_EOF) {
         
-       
+        // Skip newlines
         if (parser_match(parser, TOKEN_NEWLINE)) {
             continue;
         }
@@ -399,7 +410,7 @@ static ASTNode* parser_parse_function(Parser* parser) {
         
         // Parse parameters
         if (parser_match(parser, TOKEN_LPAREN)) {
-            parameters for now (simplified)
+            // Skip parameters for now (simplified)
             while (parser_current_token(parser)->type != TOKEN_RPAREN &&
                    parser_current_token(parser)->type != TOKEN_EOF) {
                 parser_advance(parser);
@@ -481,9 +492,9 @@ static ASTNode* parser_parse_statement(Parser* parser) {
         node = parser_parse_expression(parser);
     }
     
-    and semicolons
+    // Skip newlines and semicolons
     while (parser_match(parser, TOKEN_NEWLINE) || parser_match(parser, TOKEN_SEMICOLON)) {
-       
+        // Skip
     }
     
     return node;
@@ -495,7 +506,7 @@ ASTNode* parser_parse(Parser* parser) {
     program->child_count = 0;
     
     while (parser_current_token(parser)->type != TOKEN_EOF) {
-        at top level
+        // Skip newlines at top level
         if (parser_match(parser, TOKEN_NEWLINE)) {
             continue;
         }
@@ -513,6 +524,9 @@ void parser_free(Parser* parser) {
     free(parser);
 }
 
+// ============================================================================
+// ENHANCED COMPILER WITH FUNCTION SUPPORT
+// ============================================================================
 
 Compiler* compiler_create(FILE* output, bool to_rust) {
     Compiler* compiler = malloc(sizeof(Compiler));
@@ -549,6 +563,7 @@ static void compiler_compile_function(Compiler* compiler, ASTNode* func) {
         in_function = false;
     }
     
+    // Default return if no explicit return
     if (compiler->to_rust) {
         fprintf(compiler->output, "    0\n");
     } else {
@@ -717,6 +732,9 @@ void compiler_free(Compiler* compiler) {
     free(compiler);
 }
 
+// ============================================================================
+// ENHANCED MAIN FUNCTION
+// ============================================================================
 
 int main(int argc, char** argv) {
     if (argc < 2) {
