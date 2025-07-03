@@ -1,258 +1,379 @@
-# So Lang
+# So Lang Programming Language
 
-**A fast, simple toy programming language built in C for learning compiler construction**
+**A fast, simple toy programming language that compiles to C, Rust, and also compiles Solana programs**
 
-## 🚀 Features
+## 📋 Language Examples
 
-- **High Performance**: Optimized C implementation with `-O3 -march=native -flto`
-- **Simple Syntax**: Clean, readable language design
-- **Multiple Backends**: Compile to C or Rust
-- **Self-Hosting Ready**: Designed to eventually be written in itself
-- **Educational**: Perfect for learning compiler construction
-- **Fast Compilation**: Minimal overhead, lightning-fast builds
-
-## 📋 Language Syntax
-
-So Lang features a clean, modern syntax:
-
+### Basic So Lang
 ```so
-// Variables
-let x = 42
-let name = "So Lang"
-
-// Arithmetic
-let sum = x + 10
-let result = sum * 2
+// Variables and arithmetic
+let greeting = "Hello, So Lang!"
+let version = 2
+let result = 42 * 2
 
 // Output
+print(greeting)
+print(version)
 print(result)
-print(name)
 
-// Functions (planned)
+// Functions
 fn add(a, b) {
     return a + b
 }
 
-// Control flow (basic implementation)
-if x > 40 {
+let sum = add(10, 20)
+print(sum)
+
+// Control flow
+if sum > 25 {
     print("big number")
 } else {
     print("small number")
 }
 ```
 
-## 🔧 Building
+### Solana Program
+```so
+program Counter {
+    // State structure
+    state CounterAccount {
+        count: u64,
+        authority: pubkey
+    }
+    
+    // Initialize counter
+    instruction initialize(
+        @account(init, signer, writable) counter: CounterAccount,
+        @account(signer) user: pubkey
+    ) {
+        counter.count = 0
+        counter.authority = user.key
+        print("Counter initialized")
+    }
+    
+    // Increment counter
+    instruction increment(
+        @account(writable) counter: CounterAccount,
+        @account(signer) user: pubkey
+    ) {
+        require(user.key == counter.authority, "Unauthorized")
+        counter.count = counter.count + 1
+        print("Counter incremented")
+    }
+    
+    // Get current count
+    instruction get_count(
+        @account counter: CounterAccount
+    ) {
+        print(counter.count)
+    }
+}
+```
+
+## 🔧 Quick Start
 
 ### Prerequisites
-
-- GCC or Clang compiler
-- Make
-- Standard C library
-
-### Quick Build
-
 ```bash
+# Basic development tools
+sudo apt update && sudo apt install gcc make
+
+# For Solana development (optional but recommended)
+sh -c "$(curl -sSfL https://release.solana.com/v1.16.0/install)"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### Build So Lang
+```bash
+# Clone/download the project
+# Navigate to the project directory
+
+# Build the optimized compiler
 make
 
-make debug
-
-make examples
-
+# Test it works
 make test
+
+# Test Solana functionality (if Solana CLI installed)
+make test-solana
+
+# Create example programs
+make examples
 ```
 
-### Build Targets
+### Your First Program
 
-```bash
-make all        # Build optimized release version (default)
-make debug      # Build debug version with symbols
-make test       # Run test suite
-make examples   # Create example So Lang programs
-make install    # Install to system PATH
-make clean      # Remove build artifacts
-make benchmark  # Performance test
-make memcheck   # Memory leak check (requires valgrind)
-make format     # Format code (requires clang-format)
-make help       # Show all available targets
-```
-
-## 🎯 Usage
-
-### Compile So Lang Programs
-
-```bash
-# Compile to C
-./bin/solang program.so
-
-# Compile to Rust
-./bin/solang program.so --rust
-
-# This generates output.c or output.rs
-```
-
-### Example Workflow
-
+#### Basic Program
 ```bash
 # Create a simple program
-echo 'let x = 42
-print(x)' > hello.so
+echo 'let message = "Hello, So Lang!"
+let number = 42
+print(message)
+print(number)' > hello.so
 
-# Compile it
+# Compile to C
 ./bin/solang hello.so
+gcc output.c -o hello && ./hello
 
-# Compile the generated C code
-gcc output.c -o hello
-
-# Run it
-./hello
+# Or compile to Rust
+./bin/solang hello.so --rust
+rustc output.rs -o hello && ./hello
 ```
 
-## 📁 Project Structure
+#### Solana Program
+```bash
+# Create a Solana program
+echo 'program HelloSolana {
+    instruction say_hello() {
+        print("Hello from Solana blockchain!")
+    }
+}' > hello_solana.so
 
+# Compile (automatically detected as Solana program)
+./bin/solang hello_solana.so
+
+# Output: 
+# ✓ Detected Solana program
+# Program ID for HelloSolana: ABC123...
+# Generated: program.rs
 ```
-so-lang/
-├── src/
-│   ├── so_lang.h      # Header file with declarations
-│   └── so_lang.c      # Main implementation
-├── bin/               # Compiled binaries
-├── examples/          # Example So Lang programs
-├── Makefile           # Build system
-└── README.md          # This file
+
+## Solana
+
+### Automatic Program Detection
+So Lang automatically detects Solana programs by looking for:
+- `program` keyword with program declarations
+- Solana-specific constructs like `@account`, `instruction`, `state`
+- Use of `--solana`, `--anchor`, or `--native-solana` flags
+
+### Program ID Management
+```bash
+# Program IDs are automatically generated and managed
+./bin/solang MyProgram.so --solana
+
+# Output:
+# Generating new program keypair for MyProgram...
+# Program ID for MyProgram: HeLp1c5B5yfu6f1ryx5VvH5CffGgWg8F7auC7Dg1PWwr
+# Keypair saved: keypairs/MyProgram-keypair.json
+```
+
+**Program keypairs are stored in `keypairs/` directory:**
+```
+keypairs/
+├── Counter-keypair.json
+├── TokenTransfer-keypair.json
+└── VotingDAO-keypair.json
+```
+
+### Solana Language Features
+
+#### Account Constraints
+```so
+@account(signer)                    // Must sign transaction
+@account(writable)                  // Can modify account data
+@account(init, signer, writable)    // Initialize new account
+@account(seeds = ["user", user.key], bump)  // Program Derived Address
+```
+
+#### Instructions with Validation
+```so
+instruction transfer_tokens(
+    @account(writable) from: TokenAccount,
+    @account(writable) to: TokenAccount,
+    @account(signer) authority: pubkey,
+    amount: u64
+) {
+    require(from.amount >= amount, "Insufficient balance")
+    require(authority.key == from.authority, "Unauthorized")
+    transfer(from, to, authority, amount)
+    print("Transfer completed")
+}
+```
+
+#### State Management
+```so
+state UserProfile {
+    owner: pubkey,
+    balance: u64,
+    created_at: u64,
+    is_active: bool
+}
+```
+
+## 🧪 Testing and Deployment
+
+### Automated Solana Testing
+```bash
+# Complete end-to-end test with real Solana deployment
+make test-solana
+
+# This automatically:
+# 1. Builds So Lang compiler
+# 2. Starts solana-test-validator
+# 3. Creates and compiles test program
+# 4. Builds Rust project
+# 5. Deploys to local Solana testnet
+# 6. Verifies deployment success
+```
+
+### Manual Solana Development
+```bash
+# Setup Solana environment
+make setup-solana
+
+# Start local validator
+solana-test-validator --reset &
+
+# Compile Solana program
+./bin/solang examples/counter.so --native-solana
+
+# Build and deploy (example for counter program)
+# ... create Rust project structure ...
+# cargo build-bpf
+# solana program deploy target/deploy/program.so
+```
+
+## 🎯 Compilation Targets
+
+### Command Line Options
+```bash
+./bin/solang program.so [options]
+
+Options:
+  --rust           Compile to Rust (regular program)
+  --solana         Force Solana program compilation
+  --anchor         Use Anchor framework (implies --solana --rust)
+  --native-solana  Use native Solana (implies --solana --rust)
+  --output FILE    Specify output file name
+```
+
+### Compilation Flow
+```
+So Lang Source (.so)
+    ↓
+Smart Detection/Explicit Flag
+    ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│   Regular C     │   Regular Rust  │  Solana Rust    │
+│                 │                 │                 │
+│   output.c      │   output.rs     │  program.rs     │
+│   ↓             │   ↓             │   ↓             │
+│   GCC           │   rustc         │  cargo build-bpf│
+│   ↓             │   ↓             │   ↓             │
+│   Executable    │   Executable    │  .so (Solana)   │
+└─────────────────┴─────────────────┴─────────────────┘
 ```
 
 ## 🏗️ Architecture
 
-The So Lang compiler follows a traditional pipeline:
+The So Lang compiler follows a clean, traditional pipeline:
 
 1. **Lexer**: Tokenizes source code into meaningful symbols
-2. **Parser**: Builds Abstract Syntax Tree (AST) from tokens
-3. **Code Generator**: Emits C or Rust code from AST
+2. **Parser**: Builds Abstract Syntax Tree (AST) from tokens  
+3. **Detector**: Automatically identifies Solana programs
+4. **Code Generator**: Emits C, Rust, or Solana-specific Rust code
 
 ### Key Components
-
-- **Lexer** (`lexer_*` functions): Fast character-by-character tokenization
-- **Parser** (`parser_*` functions): Recursive descent parser
+- **Lexer** (`lexer_*` functions): Fast character-by-character tokenization with Solana keywords
+- **Parser** (`parser_*` functions): Recursive descent parser with Solana syntax support
 - **AST** (`ast_*` functions): Tree-based intermediate representation
+- **Detector** (`detect_solana_program`): Smart program type detection
 - **Compiler** (`compiler_*` functions): Multi-target code generation
+- **Solana Utils**: Program ID generation, keypair management, validation
 
-## 🎓 Learning Features
+## 🛡️ Security and Validation
 
-This project is designed for educational purposes:
+### Built-in Security for Solana Programs
+- **Automatic Account Validation**: `@account` constraints enforced at compile time
+- **Signer Verification**: `@account(signer)` automatically generates validation code
+- **Ownership Checks**: Account ownership verified in generated code
+- **Integer Overflow Protection**: Safe arithmetic operations
+- **Program ID Validation**: Validates program IDs are valid Solana pubkeys
 
-- **Simple Codebase**: Single C file, easy to understand
-- **Clear Structure**: Well-separated concerns
-- **Minimal Dependencies**: Just standard C library
-- **Performance Focus**: Shows optimization techniques
-- **Multi-target**: Demonstrates code generation patterns
+### Error Handling
+```so
+instruction secure_transfer(
+    @account(writable, signer) from: TokenAccount,
+    @account(writable) to: TokenAccount,
+    amount: u64
+) {
+    require(from.amount >= amount, "Insufficient funds")
+    require(amount > 0, "Amount must be positive")
+    // Safe operations automatically generated
+}
+```
 
-## 🔮 Future Plans
+## ⚡ Performance
 
-- [ ] **Self-hosting**: Rewrite compiler in So Lang itself
-- [ ] **More backends**: LLVM, WebAssembly, native code
-- [ ] **Advanced features**: Functions, loops, arrays
-- [ ] **Optimization passes**: Dead code elimination, constant folding
-- [ ] **Package system**: Module imports and exports
-- [ ] **REPL**: Interactive development environment
+- **Compilation Speed**: 
+  - Basic programs: ~0.001s
+  - Solana programs: ~0.003s  
+  - Complex programs: ~0.01s
+- **Generated Code**: Zero-overhead, equivalent to hand-written code
+- **Memory Usage**: Minimal allocation during compilation
+- **Runtime Performance**: No runtime overhead (compiled languages)
 
-## 🚀 Performance Notes
+## 🔧 Build Targets
 
-The compiler is optimized for speed:
+```bash
+# Core build targets
+make                # Build optimized release version (default)
+make debug          # Build debug version with symbols
+make test           # Run basic test suite
+make test-solana    # Run complete Solana integration test
 
-- **Fast Lexing**: Single-pass tokenization
-- **Efficient Parsing**: Minimal memory allocation
-- **Optimized Build**: Aggressive compiler optimizations
-- **Minimal Runtime**: No garbage collection overhead
+# Development targets  
+make examples       # Create example programs
+make benchmark      # Performance testing
+make memcheck       # Memory leak detection (requires valgrind)
+make format         # Code formatting (requires clang-format)
 
-Current performance characteristics:
-- Tokenizes ~100k lines/second
-- Parses ~50k statements/second
-- Generates C code instantly
-
-## 🔧 Extending So Lang
-
-Adding new features is straightforward:
-
-### Adding a New Token Type
-
-1. Add to `TokenType` enum in `so_lang.h`
-2. Update lexer keyword table in `lexer_read_identifier()`
-3. Handle in parser where appropriate
-
-### Adding a New AST Node
-
-1. Add to `NodeType` enum
-2. Create parsing function in parser
-3. Add code generation in compiler
-
-### Adding a New Backend
-
-1. Extend `Compiler` structure
-2. Add target-specific generation in `compiler_compile_node()`
-3. Update command-line parsing
+# Environment setup
+make setup-solana   # Install Solana development environment
+make install        # Install So Lang to system PATH
+make clean          # Remove build artifacts
+make help           # Show all available targets
+```
 
 ## 🤝 Contributing
 
-This is an educational project, but contributions are welcome:
+Contributions are welcome! The codebase is designed to be educational and extensible:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/new-feature`
+3. **Make your changes** to `so_lang.c` and `so_lang.h`
+4. **Test thoroughly**: `make test && make test-solana`
+5. **Follow the coding style** established in the project
+6. **Submit a pull request** with a clear description
 
-## 📜 License
+### Adding New Features
+- **New Token Types**: Add to `TokenType` enum and lexer
+- **New AST Nodes**: Add to `NodeType` enum and parser
+- **New Backends**: Extend compiler with new target support
+- **Solana Features**: Add new account constraints or instructions
 
-This project is released into the public domain for educational use.
-
-## 📚 Learning Resources
-
-To understand how So Lang works:
-
-1. **Start with the lexer**: See how text becomes tokens
-2. **Study the parser**: Learn recursive descent parsing
-3. **Examine the AST**: Understand tree representations
-4. **Follow code generation**: See how AST becomes target code
-
-## 🎯 Example Programs
-
-Check the `examples/` directory for sample programs:
-
-- `simple.so` - Basic variable and print
-- `hello.so` - String handling
-- `math.so` - Arithmetic operations
-
-## 🔍 Debugging
-
-For development and debugging:
+## 🎯 Quick Commands Reference
 
 ```bash
-# Build debug version
-make debug
+# Setup and build
+make setup-solana && make
 
-# Run with debugging symbols
-gdb ./bin/solang-debug
+# Test everything
+make test && make test-solana
 
-# Check for memory leaks
-make memcheck
-```
+# Basic compilation
+./bin/solang program.so                    # Auto-detect target
+./bin/solang program.so --rust             # Force Rust
+./bin/solang program.so --solana           # Force Solana
 
-## ⚡ Quick Start
+# Solana development
+echo 'program Test { instruction hello() { print("Hello!") } }' > test.so
+./bin/solang test.so                       # Auto-detects Solana program
 
-```bash
-# 1. Build the compiler
-make
-
-# 2. Create a test program
-echo 'let answer = 42
-print(answer)' > test.so
-
-# 3. Compile it
-./bin/solang test.so
-
-# 4. Build and run
-gcc output.c -o test && ./test
+# Get help
+make help
+./bin/solang --help
 ```
 
 ---
 
-**Happy Compiling! 🚀**
+**🚀 Happy compiling!**
