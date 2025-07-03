@@ -1,4 +1,4 @@
-# So Lang Programming Language
+# So Programming Language
 
 **A fast, simple toy programming language that compiles to C, Rust, and also compiles Solana programs**
 
