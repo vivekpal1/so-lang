@@ -1,6 +1,5 @@
 /*
  * so_lang.h - So Lang Programming Language Header
- * Location: src/so_lang.h
  * A fast, simple toy programming language built in C
  */
 
