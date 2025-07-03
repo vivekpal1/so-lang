@@ -1,0 +1,156 @@
+// counter.so - Solana Counter Program in So Lang
+// A simple counter program demonstrating Solana development in So Lang
+
+program Counter("HeLp1c5B5yfu6f1ryx5VvH5CffGgWg8F7auC7Dg1PWwr") {
+    
+    // State structure for the counter
+    state CounterData {
+        count: u64,
+        authority: pubkey,
+        last_updated: u64
+    }
+    
+    // Error definitions
+    error CounterError {
+        Unauthorized = "Only the authority can modify the counter",
+        Overflow = "Counter overflow detected"
+    }
+    
+    // Initialize the counter
+    instruction initialize(
+        @account(init, signer, writable) counter: CounterData,
+        @account(signer) authority: pubkey,
+        @account system_program: pubkey
+    ) {
+        require(counter.is_initialized == false, "Counter already initialized")
+        
+        counter.count = 0
+        counter.authority = authority.key
+        counter.last_updated = clock.unix_timestamp
+        
+        emit CounterInitialized {
+            counter: counter.key,
+            authority: authority.key,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Increment the counter
+    instruction increment(
+        @account(writable) counter: CounterData,
+        @account(signer) authority: pubkey
+    ) {
+        require(authority.key == counter.authority, CounterError.Unauthorized)
+        require(counter.count < 18446744073709551614, CounterError.Overflow)
+        
+        let old_count = counter.count
+        counter.count = counter.count + 1
+        counter.last_updated = clock.unix_timestamp
+        
+        emit CounterIncremented {
+            counter: counter.key,
+            old_count: old_count,
+            new_count: counter.count,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Decrement the counter
+    instruction decrement(
+        @account(writable) counter: CounterData,
+        @account(signer) authority: pubkey
+    ) {
+        require(authority.key == counter.authority, CounterError.Unauthorized)
+        require(counter.count > 0, "Cannot decrement below zero")
+        
+        let old_count = counter.count
+        counter.count = counter.count - 1
+        counter.last_updated = clock.unix_timestamp
+        
+        emit CounterDecremented {
+            counter: counter.key,
+            old_count: old_count,
+            new_count: counter.count,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Reset the counter
+    instruction reset(
+        @account(writable) counter: CounterData,
+        @account(signer) authority: pubkey
+    ) {
+        require(authority.key == counter.authority, CounterError.Unauthorized)
+        
+        let old_count = counter.count
+        counter.count = 0
+        counter.last_updated = clock.unix_timestamp
+        
+        emit CounterReset {
+            counter: counter.key,
+            old_count: old_count,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Get current counter value (view function)
+    instruction get_count(
+        @account counter: CounterData
+    ) -> u64 {
+        return counter.count
+    }
+    
+    // Transfer authority
+    instruction transfer_authority(
+        @account(writable) counter: CounterData,
+        @account(signer) current_authority: pubkey,
+        @account new_authority: pubkey
+    ) {
+        require(current_authority.key == counter.authority, CounterError.Unauthorized)
+        
+        let old_authority = counter.authority
+        counter.authority = new_authority.key
+        counter.last_updated = clock.unix_timestamp
+        
+        emit AuthorityTransferred {
+            counter: counter.key,
+            old_authority: old_authority,
+            new_authority: new_authority.key,
+            timestamp: clock.unix_timestamp
+        }
+    }
+}
+
+// Event definitions
+event CounterInitialized {
+    counter: pubkey,
+    authority: pubkey,
+    timestamp: u64
+}
+
+event CounterIncremented {
+    counter: pubkey,
+    old_count: u64,
+    new_count: u64,
+    timestamp: u64
+}
+
+event CounterDecremented {
+    counter: pubkey,
+    old_count: u64,
+    new_count: u64,
+    timestamp: u64
+}
+
+event CounterReset {
+    counter: pubkey,
+    old_count: u64,
+    timestamp: u64
+}
+
+event AuthorityTransferred {
+    counter: pubkey,
+    old_authority: pubkey,
+    new_authority: pubkey,
+    timestamp: u64
+}

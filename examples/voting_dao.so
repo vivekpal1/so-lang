@@ -1,0 +1,430 @@
+// voting_dao.so - Decentralized Autonomous Organization Voting Program
+// Demonstrates governance, voting, and DAO functionality in So Lang
+
+program VotingDAO("VotingDAO1111111111111111111111111111111111") {
+    
+    // DAO configuration
+    state DAOConfig {
+        admin: pubkey,
+        governance_token_mint: pubkey,
+        proposal_threshold: u64,
+        voting_duration: u64,
+        execution_delay: u64,
+        quorum_percentage: u8,
+        total_proposals: u64,
+        is_active: bool,
+        created_at: u64
+    }
+    
+    // Proposal structure
+    state Proposal {
+        id: u64,
+        proposer: pubkey,
+        title: string,
+        description: string,
+        target_program: pubkey,
+        instruction_data: bytes,
+        yes_votes: u64,
+        no_votes: u64,
+        total_votes: u64,
+        start_time: u64,
+        end_time: u64,
+        execution_time: u64,
+        status: ProposalStatus,
+        executed: bool,
+        cancelled: bool
+    }
+    
+    // Vote record
+    state VoteRecord {
+        proposal_id: u64,
+        voter: pubkey,
+        vote_weight: u64,
+        vote_type: VoteType,
+        timestamp: u64
+    }
+    
+    // Member structure
+    state Member {
+        wallet: pubkey,
+        token_balance: u64,
+        voting_power: u64,
+        proposals_created: u64,
+        votes_cast: u64,
+        joined_at: u64,
+        is_active: bool
+    }
+    
+    // Enums
+    enum ProposalStatus {
+        Draft,
+        Active,
+        Succeeded,
+        Failed,
+        Executed,
+        Cancelled
+    }
+    
+    enum VoteType {
+        Yes,
+        No,
+        Abstain
+    }
+    
+    // Error codes
+    error DAOError {
+        Unauthorized = "Unauthorized operation",
+        InsufficientTokens = "Insufficient governance tokens",
+        ProposalNotActive = "Proposal is not active",
+        AlreadyVoted = "Already voted on this proposal",
+        VotingEnded = "Voting period has ended",
+        VotingNotEnded = "Voting period has not ended",
+        QuorumNotMet = "Quorum requirements not met",
+        ProposalNotPassed = "Proposal did not pass",
+        ExecutionDelayNotMet = "Execution delay not met",
+        AlreadyExecuted = "Proposal already executed",
+        InvalidVoteWeight = "Invalid vote weight"
+    }
+    
+    // Initialize the DAO
+    instruction initialize_dao(
+        @account(init, payer = admin, space = 8 + 200) dao_config: DAOConfig,
+        @account(signer) admin: pubkey,
+        @account governance_token_mint: Mint,
+        @account system_program: pubkey,
+        proposal_threshold: u64,
+        voting_duration: u64,
+        execution_delay: u64,
+        quorum_percentage: u8
+    ) {
+        require(quorum_percentage <= 100, "Quorum percentage must be <= 100")
+        require(proposal_threshold > 0, "Proposal threshold must be > 0")
+        require(voting_duration > 0, "Voting duration must be > 0")
+        
+        dao_config.admin = admin.key
+        dao_config.governance_token_mint = governance_token_mint.key
+        dao_config.proposal_threshold = proposal_threshold
+        dao_config.voting_duration = voting_duration
+        dao_config.execution_delay = execution_delay
+        dao_config.quorum_percentage = quorum_percentage
+        dao_config.total_proposals = 0
+        dao_config.is_active = true
+        dao_config.created_at = clock.unix_timestamp
+        
+        emit DAOInitialized {
+            dao: dao_config.key,
+            admin: admin.key,
+            governance_token: governance_token_mint.key,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Register as a DAO member
+    instruction register_member(
+        @account dao_config: DAOConfig,
+        @account(init, seeds = ["member", dao_config.key, wallet.key], bump, payer = wallet, space = 8 + 150) member: Member,
+        @account member_token_account: TokenAccount,
+        @account(signer) wallet: pubkey,
+        @account system_program: pubkey
+    ) {
+        require(dao_config.is_active, "DAO is not active")
+        require(member_token_account.mint == dao_config.governance_token_mint, "Invalid token mint")
+        require(member_token_account.amount >= dao_config.proposal_threshold, DAOError.InsufficientTokens)
+        
+        member.wallet = wallet.key
+        member.token_balance = member_token_account.amount
+        member.voting_power = member_token_account.amount
+        member.proposals_created = 0
+        member.votes_cast = 0
+        member.joined_at = clock.unix_timestamp
+        member.is_active = true
+        
+        emit MemberRegistered {
+            dao: dao_config.key,
+            member: wallet.key,
+            voting_power: member.voting_power,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Create a new proposal
+    instruction create_proposal(
+        @account(writable) dao_config: DAOConfig,
+        @account(init, seeds = ["proposal", dao_config.key, dao_config.total_proposals.to_string()], bump, payer = proposer, space = 8 + 500) proposal: Proposal,
+        @account(writable, seeds = ["member", dao_config.key, proposer.key], bump) member: Member,
+        @account proposer_token_account: TokenAccount,
+        @account(signer) proposer: pubkey,
+        @account system_program: pubkey,
+        title: string,
+        description: string,
+        target_program: pubkey,
+        instruction_data: bytes
+    ) {
+        require(dao_config.is_active, "DAO is not active")
+        require(member.is_active, "Member is not active")
+        require(proposer_token_account.mint == dao_config.governance_token_mint, "Invalid token mint")
+        require(proposer_token_account.amount >= dao_config.proposal_threshold, DAOError.InsufficientTokens)
+        
+        let proposal_id = dao_config.total_proposals
+        
+        proposal.id = proposal_id
+        proposal.proposer = proposer.key
+        proposal.title = title
+        proposal.description = description
+        proposal.target_program = target_program
+        proposal.instruction_data = instruction_data
+        proposal.yes_votes = 0
+        proposal.no_votes = 0
+        proposal.total_votes = 0
+        proposal.start_time = clock.unix_timestamp
+        proposal.end_time = clock.unix_timestamp + dao_config.voting_duration
+        proposal.execution_time = proposal.end_time + dao_config.execution_delay
+        proposal.status = ProposalStatus.Active
+        proposal.executed = false
+        proposal.cancelled = false
+        
+        dao_config.total_proposals = dao_config.total_proposals + 1
+        member.proposals_created = member.proposals_created + 1
+        
+        emit ProposalCreated {
+            dao: dao_config.key,
+            proposal_id: proposal_id,
+            proposer: proposer.key,
+            title: title,
+            start_time: proposal.start_time,
+            end_time: proposal.end_time
+        }
+    }
+    
+    // Cast a vote on a proposal
+    instruction vote(
+        @account dao_config: DAOConfig,
+        @account(writable, seeds = ["proposal", dao_config.key, proposal_id.to_string()], bump) proposal: Proposal,
+        @account(init, seeds = ["vote", proposal.key, voter.key], bump, payer = voter, space = 8 + 100) vote_record: VoteRecord,
+        @account(writable, seeds = ["member", dao_config.key, voter.key], bump) member: Member,
+        @account voter_token_account: TokenAccount,
+        @account(signer) voter: pubkey,
+        @account system_program: pubkey,
+        proposal_id: u64,
+        vote_type: VoteType
+    ) {
+        require(dao_config.is_active, "DAO is not active")
+        require(member.is_active, "Member is not active")
+        require(proposal.status == ProposalStatus.Active, DAOError.ProposalNotActive)
+        require(clock.unix_timestamp <= proposal.end_time, DAOError.VotingEnded)
+        require(voter_token_account.mint == dao_config.governance_token_mint, "Invalid token mint")
+        
+        let vote_weight = voter_token_account.amount
+        require(vote_weight > 0, DAOError.InvalidVoteWeight)
+        
+        // Record the vote
+        vote_record.proposal_id = proposal_id
+        vote_record.voter = voter.key
+        vote_record.vote_weight = vote_weight
+        vote_record.vote_type = vote_type
+        vote_record.timestamp = clock.unix_timestamp
+        
+        // Update proposal vote counts
+        if vote_type == VoteType.Yes {
+            proposal.yes_votes = proposal.yes_votes + vote_weight
+        } else if vote_type == VoteType.No {
+            proposal.no_votes = proposal.no_votes + vote_weight
+        }
+        
+        proposal.total_votes = proposal.total_votes + vote_weight
+        member.votes_cast = member.votes_cast + 1
+        
+        emit VoteCast {
+            dao: dao_config.key,
+            proposal_id: proposal_id,
+            voter: voter.key,
+            vote_type: vote_type,
+            vote_weight: vote_weight,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Finalize voting on a proposal
+    instruction finalize_proposal(
+        @account dao_config: DAOConfig,
+        @account(writable, seeds = ["proposal", dao_config.key, proposal_id.to_string()], bump) proposal: Proposal,
+        @account governance_token_mint: Mint,
+        proposal_id: u64
+    ) {
+        require(clock.unix_timestamp > proposal.end_time, DAOError.VotingNotEnded)
+        require(proposal.status == ProposalStatus.Active, "Proposal not active")
+        
+        let total_supply = governance_token_mint.supply
+        let required_quorum = (total_supply * dao_config.quorum_percentage as u64) / 100
+        
+        if proposal.total_votes >= required_quorum {
+            if proposal.yes_votes > proposal.no_votes {
+                proposal.status = ProposalStatus.Succeeded
+            } else {
+                proposal.status = ProposalStatus.Failed
+            }
+        } else {
+            proposal.status = ProposalStatus.Failed
+        }
+        
+        emit ProposalFinalized {
+            dao: dao_config.key,
+            proposal_id: proposal_id,
+            status: proposal.status,
+            yes_votes: proposal.yes_votes,
+            no_votes: proposal.no_votes,
+            total_votes: proposal.total_votes,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Execute a passed proposal
+    instruction execute_proposal(
+        @account dao_config: DAOConfig,
+        @account(writable, seeds = ["proposal", dao_config.key, proposal_id.to_string()], bump) proposal: Proposal,
+        @account target_program: pubkey,
+        proposal_id: u64
+    ) {
+        require(proposal.status == ProposalStatus.Succeeded, DAOError.ProposalNotPassed)
+        require(clock.unix_timestamp >= proposal.execution_time, DAOError.ExecutionDelayNotMet)
+        require(proposal.executed == false, DAOError.AlreadyExecuted)
+        require(proposal.target_program == target_program.key, "Invalid target program")
+        
+        // Execute the proposal instruction
+        invoke(
+            create_instruction(
+                proposal.target_program,
+                proposal.instruction_data
+            ),
+            &[]
+        )
+        
+        proposal.executed = true
+        proposal.status = ProposalStatus.Executed
+        
+        emit ProposalExecuted {
+            dao: dao_config.key,
+            proposal_id: proposal_id,
+            target_program: proposal.target_program,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Cancel a proposal (admin only)
+    instruction cancel_proposal(
+        @account dao_config: DAOConfig,
+        @account(writable, seeds = ["proposal", dao_config.key, proposal_id.to_string()], bump) proposal: Proposal,
+        @account(signer) admin: pubkey,
+        proposal_id: u64
+    ) {
+        require(admin.key == dao_config.admin, DAOError.Unauthorized)
+        require(proposal.status == ProposalStatus.Active, "Cannot cancel non-active proposal")
+        
+        proposal.cancelled = true
+        proposal.status = ProposalStatus.Cancelled
+        
+        emit ProposalCancelled {
+            dao: dao_config.key,
+            proposal_id: proposal_id,
+            admin: admin.key,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Update member voting power based on current token balance
+    instruction update_voting_power(
+        @account dao_config: DAOConfig,
+        @account(writable, seeds = ["member", dao_config.key, member_wallet.key], bump) member: Member,
+        @account member_token_account: TokenAccount,
+        @account(signer) member_wallet: pubkey
+    ) {
+        require(member.wallet == member_wallet.key, DAOError.Unauthorized)
+        require(member_token_account.mint == dao_config.governance_token_mint, "Invalid token mint")
+        
+        let old_power = member.voting_power
+        member.token_balance = member_token_account.amount
+        member.voting_power = member_token_account.amount
+        
+        emit VotingPowerUpdated {
+            dao: dao_config.key,
+            member: member_wallet.key,
+            old_power: old_power,
+            new_power: member.voting_power,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Helper function to create instruction
+    fn create_instruction(program_id: pubkey, data: bytes) -> Instruction {
+        return Instruction {
+            program_id: program_id,
+            accounts: [],
+            data: data
+        }
+    }
+}
+
+// Event definitions
+event DAOInitialized {
+    dao: pubkey,
+    admin: pubkey,
+    governance_token: pubkey,
+    timestamp: u64
+}
+
+event MemberRegistered {
+    dao: pubkey,
+    member: pubkey,
+    voting_power: u64,
+    timestamp: u64
+}
+
+event ProposalCreated {
+    dao: pubkey,
+    proposal_id: u64,
+    proposer: pubkey,
+    title: string,
+    start_time: u64,
+    end_time: u64
+}
+
+event VoteCast {
+    dao: pubkey,
+    proposal_id: u64,
+    voter: pubkey,
+    vote_type: VoteType,
+    vote_weight: u64,
+    timestamp: u64
+}
+
+event ProposalFinalized {
+    dao: pubkey,
+    proposal_id: u64,
+    status: ProposalStatus,
+    yes_votes: u64,
+    no_votes: u64,
+    total_votes: u64,
+    timestamp: u64
+}
+
+event ProposalExecuted {
+    dao: pubkey,
+    proposal_id: u64,
+    target_program: pubkey,
+    timestamp: u64
+}
+
+event ProposalCancelled {
+    dao: pubkey,
+    proposal_id: u64,
+    admin: pubkey,
+    timestamp: u64
+}
+
+event VotingPowerUpdated {
+    dao: pubkey,
+    member: pubkey,
+    old_power: u64,
+    new_power: u64,
+    timestamp: u64
+}

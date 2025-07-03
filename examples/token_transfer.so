@@ -1,0 +1,330 @@
+// token_transfer.so - Advanced Token Transfer Program in So Lang
+// Demonstrates token operations, PDAs, and complex Solana features
+
+program TokenTransfer("TokenTransferProgram11111111111111111111") {
+    
+    // Escrow account structure
+    state EscrowAccount {
+        sender: pubkey,
+        recipient: pubkey,
+        mint: pubkey,
+        amount: u64,
+        created_at: u64,
+        expires_at: u64,
+        is_claimed: bool,
+        bump: u8
+    }
+    
+    // Vault authority structure
+    state VaultAuthority {
+        bump: u8
+    }
+    
+    // Error codes
+    error TransferError {
+        Unauthorized = "Unauthorized operation",
+        EscrowExpired = "Escrow has expired",
+        EscrowNotExpired = "Escrow has not expired yet",
+        AlreadyClaimed = "Tokens already claimed",
+        InvalidAmount = "Invalid token amount",
+        InvalidMint = "Invalid token mint",
+        InsufficientFunds = "Insufficient token balance"
+    }
+    
+    // Create an escrow for token transfer
+    instruction create_escrow(
+        @account(init, seeds = ["escrow", sender.key, recipient.key, mint.key], bump, payer = sender, space = 8 + 200) escrow: EscrowAccount,
+        @account(init, seeds = ["vault", escrow.key], bump, payer = sender, token::mint = mint, token::authority = vault_authority) vault: TokenAccount,
+        @account(seeds = ["vault_authority"], bump) vault_authority: VaultAuthority,
+        @account(writable) sender_token_account: TokenAccount,
+        @account(signer) sender: pubkey,
+        @account recipient: pubkey,
+        @account mint: Mint,
+        @account token_program: pubkey,
+        @account system_program: pubkey,
+        amount: u64,
+        expiry_duration: u64
+    ) {
+        require(amount > 0, TransferError.InvalidAmount)
+        require(sender_token_account.mint == mint.key, TransferError.InvalidMint)
+        require(sender_token_account.amount >= amount, TransferError.InsufficientFunds)
+        
+        // Transfer tokens from sender to vault
+        transfer(
+            sender_token_account,
+            vault,
+            sender,
+            amount
+        )
+        
+        // Initialize escrow account
+        escrow.sender = sender.key
+        escrow.recipient = recipient.key
+        escrow.mint = mint.key
+        escrow.amount = amount
+        escrow.created_at = clock.unix_timestamp
+        escrow.expires_at = clock.unix_timestamp + expiry_duration
+        escrow.is_claimed = false
+        escrow.bump = get_bump("escrow", sender.key, recipient.key, mint.key)
+        
+        // Initialize vault authority
+        vault_authority.bump = get_bump("vault_authority")
+        
+        emit EscrowCreated {
+            escrow: escrow.key,
+            sender: sender.key,
+            recipient: recipient.key,
+            mint: mint.key,
+            amount: amount,
+            expires_at: escrow.expires_at
+        }
+    }
+    
+    // Claim tokens from escrow
+    instruction claim_tokens(
+        @account(writable, seeds = ["escrow", escrow.sender, recipient.key, escrow.mint], bump = escrow.bump) escrow: EscrowAccount,
+        @account(writable, seeds = ["vault", escrow.key], bump, token::mint = escrow.mint, token::authority = vault_authority) vault: TokenAccount,
+        @account(seeds = ["vault_authority"], bump = vault_authority.bump) vault_authority: VaultAuthority,
+        @account(writable) recipient_token_account: TokenAccount,
+        @account(signer) recipient: pubkey,
+        @account token_program: pubkey
+    ) {
+        require(recipient.key == escrow.recipient, TransferError.Unauthorized)
+        require(escrow.is_claimed == false, TransferError.AlreadyClaimed)
+        require(clock.unix_timestamp <= escrow.expires_at, TransferError.EscrowExpired)
+        require(recipient_token_account.mint == escrow.mint, TransferError.InvalidMint)
+        
+        // Transfer tokens from vault to recipient
+        let authority_seeds = [
+            "vault_authority".as_bytes(),
+            &[vault_authority.bump]
+        ]
+        
+        invoke_signed(
+            transfer(vault, recipient_token_account, vault_authority, escrow.amount),
+            &[authority_seeds]
+        )
+        
+        // Mark as claimed
+        escrow.is_claimed = true
+        
+        emit TokensClaimed {
+            escrow: escrow.key,
+            recipient: recipient.key,
+            amount: escrow.amount,
+            claimed_at: clock.unix_timestamp
+        }
+    }
+    
+    // Cancel escrow and return tokens to sender
+    instruction cancel_escrow(
+        @account(writable, seeds = ["escrow", sender.key, escrow.recipient, escrow.mint], bump = escrow.bump) escrow: EscrowAccount,
+        @account(writable, seeds = ["vault", escrow.key], bump, token::mint = escrow.mint, token::authority = vault_authority) vault: TokenAccount,
+        @account(seeds = ["vault_authority"], bump = vault_authority.bump) vault_authority: VaultAuthority,
+        @account(writable) sender_token_account: TokenAccount,
+        @account(signer) sender: pubkey,
+        @account token_program: pubkey
+    ) {
+        require(sender.key == escrow.sender, TransferError.Unauthorized)
+        require(escrow.is_claimed == false, TransferError.AlreadyClaimed)
+        require(
+            clock.unix_timestamp > escrow.expires_at || sender.key == escrow.sender,
+            TransferError.EscrowNotExpired
+        )
+        require(sender_token_account.mint == escrow.mint, TransferError.InvalidMint)
+        
+        // Transfer tokens back to sender
+        let authority_seeds = [
+            "vault_authority".as_bytes(),
+            &[vault_authority.bump]
+        ]
+        
+        invoke_signed(
+            transfer(vault, sender_token_account, vault_authority, escrow.amount),
+            &[authority_seeds]
+        )
+        
+        // Mark as claimed (cancelled)
+        escrow.is_claimed = true
+        
+        emit EscrowCancelled {
+            escrow: escrow.key,
+            sender: sender.key,
+            amount: escrow.amount,
+            cancelled_at: clock.unix_timestamp
+        }
+    }
+    
+    // Batch transfer to multiple recipients
+    instruction batch_transfer(
+        @account(writable) sender_token_account: TokenAccount,
+        @account(signer) sender: pubkey,
+        @account mint: Mint,
+        @account token_program: pubkey,
+        recipients: [pubkey; 5],
+        amounts: [u64; 5],
+        recipient_token_accounts: [TokenAccount; 5]
+    ) {
+        require(sender_token_account.mint == mint.key, TransferError.InvalidMint)
+        
+        let total_amount = 0
+        let i = 0
+        
+        // Calculate total amount needed
+        while i < 5 {
+            require(amounts[i] > 0, TransferError.InvalidAmount)
+            require(recipient_token_accounts[i].mint == mint.key, TransferError.InvalidMint)
+            total_amount = total_amount + amounts[i]
+            i = i + 1
+        }
+        
+        require(sender_token_account.amount >= total_amount, TransferError.InsufficientFunds)
+        
+        // Perform transfers
+        i = 0
+        while i < 5 {
+            if amounts[i] > 0 {
+                transfer(
+                    sender_token_account,
+                    recipient_token_accounts[i],
+                    sender,
+                    amounts[i]
+                )
+                
+                emit TokenTransferred {
+                    from: sender.key,
+                    to: recipients[i],
+                    mint: mint.key,
+                    amount: amounts[i],
+                    timestamp: clock.unix_timestamp
+                }
+            }
+            i = i + 1
+        }
+        
+        emit BatchTransferCompleted {
+            sender: sender.key,
+            total_amount: total_amount,
+            recipient_count: 5,
+            timestamp: clock.unix_timestamp
+        }
+    }
+    
+    // Create a time-locked token account
+    instruction create_timelock(
+        @account(init, seeds = ["timelock", owner.key, mint.key], bump, payer = owner, space = 8 + 100) timelock: TimelockAccount,
+        @account(init, seeds = ["timelock_vault", timelock.key], bump, payer = owner, token::mint = mint, token::authority = timelock_authority) vault: TokenAccount,
+        @account(seeds = ["timelock_authority"], bump) timelock_authority: TimelockAuthority,
+        @account(writable) owner_token_account: TokenAccount,
+        @account(signer) owner: pubkey,
+        @account mint: Mint,
+        @account token_program: pubkey,
+        @account system_program: pubkey,
+        amount: u64,
+        unlock_timestamp: u64
+    ) {
+        require(amount > 0, TransferError.InvalidAmount)
+        require(unlock_timestamp > clock.unix_timestamp, "Unlock time must be in the future")
+        require(owner_token_account.mint == mint.key, TransferError.InvalidMint)
+        require(owner_token_account.amount >= amount, TransferError.InsufficientFunds)
+        
+        // Transfer tokens to timelock vault
+        transfer(
+            owner_token_account,
+            vault,
+            owner,
+            amount
+        )
+        
+        // Initialize timelock
+        timelock.owner = owner.key
+        timelock.mint = mint.key
+        timelock.amount = amount
+        timelock.unlock_timestamp = unlock_timestamp
+        timelock.is_unlocked = false
+        timelock.bump = get_bump("timelock", owner.key, mint.key)
+        
+        emit TimelockCreated {
+            timelock: timelock.key,
+            owner: owner.key,
+            mint: mint.key,
+            amount: amount,
+            unlock_timestamp: unlock_timestamp
+        }
+    }
+    
+    // Utility function to get PDA bump
+    fn get_bump(seed1: string, key1: pubkey, key2: pubkey, key3: pubkey) -> u8 {
+        let seeds = [seed1.as_bytes(), key1.as_bytes(), key2.as_bytes(), key3.as_bytes()]
+        let (pda, bump) = pubkey.find_program_address(seeds, program_id)
+        return bump
+    }
+    
+    // Utility function to get simple bump
+    fn get_bump(seed: string) -> u8 {
+        let seeds = [seed.as_bytes()]
+        let (pda, bump) = pubkey.find_program_address(seeds, program_id)
+        return bump
+    }
+}
+
+// Additional state structures
+state TimelockAccount {
+    owner: pubkey,
+    mint: pubkey,
+    amount: u64,
+    unlock_timestamp: u64,
+    is_unlocked: bool,
+    bump: u8
+}
+
+state TimelockAuthority {
+    bump: u8
+}
+
+// Event definitions
+event EscrowCreated {
+    escrow: pubkey,
+    sender: pubkey,
+    recipient: pubkey,
+    mint: pubkey,
+    amount: u64,
+    expires_at: u64
+}
+
+event TokensClaimed {
+    escrow: pubkey,
+    recipient: pubkey,
+    amount: u64,
+    claimed_at: u64
+}
+
+event EscrowCancelled {
+    escrow: pubkey,
+    sender: pubkey,
+    amount: u64,
+    cancelled_at: u64
+}
+
+event TokenTransferred {
+    from: pubkey,
+    to: pubkey,
+    mint: pubkey,
+    amount: u64,
+    timestamp: u64
+}
+
+event BatchTransferCompleted {
+    sender: pubkey,
+    total_amount: u64,
+    recipient_count: u8,
+    timestamp: u64
+}
+
+event TimelockCreated {
+    timelock: pubkey,
+    owner: pubkey,
+    mint: pubkey,
+    amount: u64,
+    unlock_timestamp: u64
+}
