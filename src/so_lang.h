@@ -1,5 +1,6 @@
 /*
  * so_lang.h - So Lang Programming Language Header
+ * Location: src/so_lang.h
  * A fast, simple toy programming language built in C
  */
 
@@ -17,7 +18,6 @@
 #define MAX_VARS 100
 #define MAX_FUNCTIONS 50
 
-// Token types
 typedef enum {
     TOKEN_EOF,
     TOKEN_LET,
@@ -44,7 +44,22 @@ typedef enum {
     TOKEN_RBRACE,
     TOKEN_COMMA,
     TOKEN_SEMICOLON,
-    TOKEN_NEWLINE
+    TOKEN_NEWLINE,
+    // Solana-specific tokens
+    TOKEN_PROGRAM,
+    TOKEN_INSTRUCTION,
+    TOKEN_ACCOUNT,
+    TOKEN_STATE,
+    TOKEN_PUBKEY,
+    TOKEN_SIGNER,
+    TOKEN_WRITABLE,
+    TOKEN_INIT,
+    TOKEN_SEEDS,
+    TOKEN_BUMP,
+    TOKEN_TRANSFER,
+    TOKEN_REQUIRE,
+    TOKEN_EMIT,
+    TOKEN_AT_SYMBOL     // @
 } TokenType;
 
 typedef struct {
@@ -65,7 +80,13 @@ typedef enum {
     NODE_IDENTIFIER,
     NODE_NUMBER,
     NODE_STRING,
-    NODE_FUNC_CALL
+    NODE_FUNC_CALL,
+    NODE_PROGRAM_DECL,
+    NODE_INSTRUCTION_DECL,
+    NODE_ACCOUNT_CONSTRAINT,
+    NODE_TRANSFER_STMT,
+    NODE_REQUIRE_STMT,
+    NODE_EMIT_STMT
 } NodeType;
 
 typedef struct ASTNode {
@@ -78,6 +99,14 @@ typedef struct ASTNode {
     struct ASTNode* else_branch;
     struct ASTNode** children;
     int child_count;
+    
+    // Solana-specific fields
+    char* program_id;
+    bool is_signer;
+    bool is_writable;
+    bool is_init;
+    char** seeds;
+    int seed_count;
 } ASTNode;
 
 typedef struct {
@@ -98,9 +127,10 @@ typedef struct {
 typedef struct {
     FILE* output;
     bool to_rust;
+    bool is_solana_program;
+    bool use_anchor;
+    char* detected_program_id;
 } Compiler;
-
-// Function declarations
 Lexer* lexer_create(char* source);
 void lexer_tokenize(Lexer* lexer);
 void lexer_free(Lexer* lexer);
@@ -119,4 +149,9 @@ void compiler_free(Compiler* compiler);
 void error(const char* message, int line, int column);
 char* read_file(const char* filename);
 
-#endif
+bool detect_solana_program(ASTNode* ast);
+char* generate_program_id(const char* program_name);
+char* get_or_create_program_keypair(const char* program_name);
+void validate_program_id(const char* program_id);
+
+#endif // SO_LANG_H
